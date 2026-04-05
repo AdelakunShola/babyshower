@@ -95,6 +95,8 @@ return [
     |
     */
 
+    'baby_shower_password' => env('BABY_SHOWER_PASSWORD', 'admin123'),
+
     'cipher' => 'AES-256-CBC',
 
     'key' => env('APP_KEY'),

@@ -96,6 +96,50 @@
         .timer-label { font-size: .72rem; color: rgba(255,255,255,.5); text-align: right; margin-top: .2rem; display: none; }
         .warn { font-size: .72rem; color: #f4836a; margin-top: .3rem; display: none; }
 
+        /* Upload progress bar */
+        .upload-progress-wrap {
+            display: none;
+            margin-top: .75rem;
+            background: rgba(255,255,255,.08);
+            border-radius: 12px;
+            padding: 1rem 1.1rem;
+            border: 1px solid rgba(255,255,255,.12);
+        }
+        .upload-progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: .5rem;
+        }
+        .upload-progress-header span {
+            font-size: .78rem;
+            color: rgba(255,255,255,.6);
+        }
+        .upload-progress-pct {
+            font-size: .85rem;
+            font-weight: 500;
+            color: #f4a07a;
+        }
+        .upload-progress-track {
+            height: 6px;
+            background: rgba(255,255,255,.12);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .upload-progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #f4a07a, #e57bb2);
+            border-radius: 3px;
+            transition: width .25s ease;
+        }
+        .upload-progress-status {
+            font-size: .72rem;
+            color: rgba(255,255,255,.4);
+            margin-top: .4rem;
+            text-align: center;
+        }
+
         .submit-btn {
             width: 100%; padding: .8rem;
             background: rgba(255,255,255,.92); color: #3d2c26;
@@ -105,8 +149,6 @@
         }
         .submit-btn:hover { background: #fff; }
         .submit-btn:disabled { background: rgba(255,255,255,.25); color: rgba(255,255,255,.4); cursor: not-allowed; }
-
-        .progress { display: none; text-align: center; margin-top: .6rem; font-size: .82rem; color: rgba(255,255,255,.55); }
 
         .alert-errors {
             background: rgba(244,131,106,.15); border: 1px solid rgba(244,131,106,.4);
@@ -198,7 +240,7 @@
                             >
                             <p style="font-size:1.4rem;margin-bottom:.3rem">🎬</p>
                             <p><strong>Click to upload or record</strong></p>
-                            <p>All formats accepted · max 40s</p>
+                            <p>All formats accepted · iPhone, Android, MP4, MOV · max 40s</p>
                         </div>
                         <div class="preview" id="preview-box">
                             <video id="preview-vid" controls playsinline></video>
@@ -211,8 +253,19 @@
                         @error('video') <div class="error">{{ $message }}</div> @enderror
                     </div>
 
+                    {{-- Upload progress bar --}}
+                    <div class="upload-progress-wrap" id="upload-progress-wrap">
+                        <div class="upload-progress-header">
+                            <span>Uploading your video</span>
+                            <span class="upload-progress-pct" id="upload-progress-pct">0%</span>
+                        </div>
+                        <div class="upload-progress-track">
+                            <div class="upload-progress-fill" id="upload-progress-fill"></div>
+                        </div>
+                        <div class="upload-progress-status" id="upload-progress-status">Please keep this page open…</div>
+                    </div>
+
                     <button class="submit-btn" id="sub-btn" type="submit" disabled>Submit my guess →</button>
-                    <div class="progress" id="progress-msg">Uploading your video, please wait…</div>
 
                 </form>
             </div>
@@ -267,6 +320,7 @@
         // Fallback for iPhone HEVC files that can't be previewed in browser
         vid.onerror = function () {
             validVideo = true;
+            document.getElementById('timer-label').style.display = 'block';
             document.getElementById('timer-label').textContent = 'Preview not available — file accepted';
             check();
         };
@@ -279,10 +333,74 @@
 
     document.querySelector('input[name=name]').addEventListener('input', check);
 
-    document.getElementById('upload-form').addEventListener('submit', function () {
-        document.getElementById('sub-btn').disabled = true;
-        document.getElementById('sub-btn').textContent = 'Uploading…';
-        document.getElementById('progress-msg').style.display = 'block';
+    // XHR submit with real progress bar
+    document.getElementById('upload-form').addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        const form = this;
+        const formData = new FormData(form);
+
+        const btn         = document.getElementById('sub-btn');
+        const progressWrap = document.getElementById('upload-progress-wrap');
+        const progressFill = document.getElementById('upload-progress-fill');
+        const progressPct  = document.getElementById('upload-progress-pct');
+        const progressStatus = document.getElementById('upload-progress-status');
+
+        btn.disabled = true;
+        btn.textContent = 'Uploading…';
+        progressWrap.style.display = 'block';
+
+        const xhr = new XMLHttpRequest();
+
+        xhr.upload.addEventListener('progress', function (e) {
+            if (e.lengthComputable) {
+                const pct = Math.round((e.loaded / e.total) * 100);
+                progressFill.style.width = pct + '%';
+                progressPct.textContent = pct + '%';
+
+                if (pct < 100) {
+                    progressStatus.textContent = 'Please keep this page open…';
+                } else {
+                    progressStatus.textContent = 'Processing, almost done…';
+                }
+            }
+        });
+
+        xhr.addEventListener('load', function () {
+            try {
+                const json = JSON.parse(xhr.responseText);
+                if (json.redirect) {
+                    progressStatus.textContent = 'Done! Redirecting…';
+                    window.location.href = json.redirect;
+                    return;
+                }
+            } catch (e) {
+                // Not JSON — follow the redirect URL directly
+            }
+            if (xhr.responseURL) {
+                progressStatus.textContent = 'Done! Redirecting…';
+                window.location.href = xhr.responseURL;
+            }
+        });
+
+        xhr.addEventListener('error', function () {
+            progressWrap.style.display = 'none';
+            btn.disabled = false;
+            btn.textContent = 'Submit my guess →';
+            alert('Upload failed. Please check your connection and try again.');
+        });
+
+        xhr.addEventListener('timeout', function () {
+            progressWrap.style.display = 'none';
+            btn.disabled = false;
+            btn.textContent = 'Submit my guess →';
+            alert('Upload timed out. Please try again.');
+        });
+
+        xhr.timeout = 300000; // 5 minute timeout
+        xhr.open('POST', form.action);
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        xhr.send(formData);
     });
 </script>
 </body>

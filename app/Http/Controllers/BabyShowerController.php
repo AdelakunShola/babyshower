@@ -65,14 +65,28 @@ class BabyShowerController extends Controller
         return view('baby-shower.thanks');
     }
 
-    public function admin()
-    {
-        $submissions = BabyShowerSubmission::latest()->get();
-        $boyCount    = $submissions->where('guess', 'boy')->count();
-        $girlCount   = $submissions->where('guess', 'girl')->count();
-
-        return view('baby-shower.admin', compact('submissions', 'boyCount', 'girlCount'));
+   public function admin(Request $request)
+{
+    // Simple password gate — set your password in .env as BABY_SHOWER_ADMIN_PASSWORD
+    if ($request->get('pwd') !== config('app.baby_shower_password')) {
+        return response('
+            <form style="font-family:sans-serif;max-width:320px;margin:6rem auto;display:flex;flex-direction:column;gap:1rem">
+                <h2 style="font-size:1.2rem">Admin Access</h2>
+                <input name="pwd" type="password" placeholder="Enter password"
+                    style="padding:.6rem .8rem;border:1px solid #ddd;border-radius:8px;font-size:1rem">
+                <button style="padding:.65rem;background:#3d2c26;color:#fff;border:none;border-radius:8px;cursor:pointer">
+                    Enter
+                </button>
+            </form>
+        ', 401);
     }
+
+    $submissions = BabyShowerSubmission::latest()->get();
+    $boyCount    = $submissions->where('guess', 'boy')->count();
+    $girlCount   = $submissions->where('guess', 'girl')->count();
+
+    return view('baby-shower.admin', compact('submissions', 'boyCount', 'girlCount'));
+}
 
     public function streamVideo(BabyShowerSubmission $submission)
     {
