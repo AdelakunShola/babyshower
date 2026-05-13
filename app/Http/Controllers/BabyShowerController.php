@@ -57,7 +57,11 @@ class BabyShowerController extends Controller
             'video_path' => $path,
         ]);
 
-        return redirect()->route('baby-shower.thanks');
+        if ($request->ajax() || $request->wantsJson() || $request->header('X-Requested-With') === 'XMLHttpRequest') {
+    return response()->json(['redirect' => route('baby-shower.thanks')]);
+}
+
+return redirect()->route('baby-shower.thanks');
     }
 
     public function thanks()
